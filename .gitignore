@@ -1,0 +1,36 @@
+# ============================================================
+#  Git 忽略规则 —— V2
+# ============================================================
+
+# ---------- 密钥（最重要） ----------
+.env
+.env.local
+.env.*.local
+
+# ---------- Python ----------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---------- 运行时产物 ----------
+logs/
+*.log
+# 用户上传的图片不进仓库（体积大、且属于运行时数据）
+backend/app/static/uploads/
+
+# ---------- 前端 ----------
+node_modules/
+dist/
+.vite/
+
+# ---------- IDE / 系统 ----------
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store

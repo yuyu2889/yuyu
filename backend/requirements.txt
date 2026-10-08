@@ -1,0 +1,58 @@
+# ============================================================
+#  高校实验室设备预约管理系统 V2 —— 后端依赖清单
+# ============================================================
+#  安装：
+#    python -m venv .venv
+#    .venv\Scripts\python.exe -m pip install -r requirements.txt
+#
+#  说明：所有版本都用 == 锁定。这样换一台电脑、或者几个月后重装，
+#        装出来的环境完全一致，不会出现"在我电脑上能跑"的问题。
+# ============================================================
+
+# ---------- Web 框架与 ASGI 服务器 ----------
+fastapi==0.115.6
+starlette==0.41.3
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+
+# ---------- 配置管理 ----------
+# pydantic-settings 让我们用「类 + 类型注解」来定义配置，
+# 缺失必填项时应用启动就直接报错，而不是运行到一半才崩。
+pydantic==2.10.6
+pydantic-settings==2.7.1
+python-dotenv==1.0.1
+
+# ---------- 数据库 ----------
+# SQLAlchemy 2.0 的异步 API + aiomysql 驱动
+SQLAlchemy==2.0.36
+aiomysql==0.2.0
+PyMySQL==1.1.1
+greenlet==3.1.1
+# MySQL 8 默认认证插件是 caching_sha2_password，
+# PyMySQL 需要这个包才能完成认证握手，否则连接直接失败。
+cryptography==44.0.0
+
+# ---------- 缓存 ----------
+redis==5.2.1
+
+# ---------- 认证与密码 ----------
+# 密码哈希：用 bcrypt 而不是 pbkdf2，bcrypt 是业界默认选择
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+# JWT 工具保留备用（V2 主认证方案是 UUID Token，
+# 但 utils 里保留 JWT 实现，方便对比两种方案的差异）
+python-jose[cryptography]==3.3.0
+
+# ---------- 定时任务 ----------
+APScheduler==3.10.4
+tzdata==2024.2
+
+# ---------- 邮件 ----------
+aiosmtplib==3.0.2
+
+# ---------- 测试 ----------
+pytest==8.3.4
+pytest-asyncio==0.25.0
+
+# ---------- 代码质量（可选，但建议用） ----------
+ruff==0.8.4
