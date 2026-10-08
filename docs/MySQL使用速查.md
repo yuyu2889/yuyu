@@ -1,5 +1,11 @@
 # MySQL 使用速查
 
+> ⚠️ **安全提示**：本文档中的密码已替换为占位符「你的密码」。
+> 请把你自己的真实密码填进去，**但不要把填好密码的版本提交到公开仓库**。
+>
+> 如果你需要一份含真实密码的备忘录，放在项目目录之外（比如 C:\code\ 下），
+> 这样就不会被 Git 跟踪。
+
 ## 一、连接信息
 
 ```
@@ -9,8 +15,8 @@
 
 | 账号 | 密码 | 权限 | 用途 |
 |------|------|------|------|
-| `root` | `******` | 全部数据库 | 管理用（建库、建账号、改结构） |
-| `yuyu` | `******` | 只能操作 `lab_equipment_db` 和 `lab_booking_v2` | 项目代码使用 |
+| `root` | `你的密码` | 全部数据库 | 管理用（建库、建账号、改结构） |
+| `yuyu` | `你的密码` | 只能操作 `lab_equipment_db` 和 `lab_booking_v2` | 项目代码使用 |
 
 **两个数据库**：
 
@@ -54,9 +60,9 @@ C:\Program Files\MySQL\mysql-8.4.9-winx64\bin
 ### 进入交互式命令行
 
 ```bash
-mysql -u root -p******
+mysql -u root -p你的密码
 # 或者连指定数据库
-mysql -u root -p****** lab_booking_v2
+mysql -u root -p你的密码 lab_booking_v2
 ```
 
 进去之后：
@@ -84,7 +90,7 @@ EXIT;
 ### 一条命令直接执行 SQL（不进交互界面）
 
 ```bash
-mysql -u root -p****** -e "SELECT COUNT(*) FROM lab_booking_v2.bookings;"
+mysql -u root -p你的密码 -e "SELECT COUNT(*) FROM lab_booking_v2.bookings;"
 ```
 
 ### 看中文不乱码
@@ -92,7 +98,7 @@ mysql -u root -p****** -e "SELECT COUNT(*) FROM lab_booking_v2.bookings;"
 命令行里如果中文显示成乱码，加上字符集参数：
 
 ```bash
-mysql -u root -p****** --default-character-set=utf8mb4 -e "SELECT name FROM lab_booking_v2.equipment LIMIT 5;"
+mysql -u root -p你的密码 --default-character-set=utf8mb4 -e "SELECT name FROM lab_booking_v2.equipment LIMIT 5;"
 ```
 
 > 说明：乱码通常只是**终端显示**问题，数据库里存的数据是好的。
@@ -171,7 +177,7 @@ innodb_buffer_pool_size = 128M
 主机：127.0.0.1
 端口：3306
 用户名：yuyu（或 root）
-密码：******
+密码：你的密码
 数据库：lab_booking_v2
 ```
 
@@ -196,7 +202,7 @@ $old = Get-Content "C:\code\PATH备份_20261008_144042.txt" -Raw
 说明这个账号没有对应数据库的权限。用 root 补授权：
 
 ```bash
-mysql -u root -p****** -e "GRANT ALL PRIVILEGES ON lab_booking_v2.* TO 'yuyu'@'127.0.0.1'; FLUSH PRIVILEGES;"
+mysql -u root -p你的密码 -e "GRANT ALL PRIVILEGES ON lab_booking_v2.* TO 'yuyu'@'127.0.0.1'; FLUSH PRIVILEGES;"
 ```
 
 ### Q：`cryptography package is required` 报错怎么办？
