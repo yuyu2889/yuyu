@@ -9,7 +9,7 @@ Repository 基类。
 - 需要拿到自增主键时可以 await session.flush()，flush 会发出 SQL 但不提交事务
 - 不在这一层做任何业务判断（比如"状态不是 pending 就不让审核"属于业务规则）
 """
-from typing import Any, Generic, List, Optional, Sequence, Type, TypeVar
+from typing import Any, Generic, Optional, Sequence, Type, TypeVar
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession

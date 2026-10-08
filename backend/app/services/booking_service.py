@@ -10,8 +10,8 @@
   3. 状态流转怎么保证不出错（状态机问题）
 """
 import logging
-from datetime import date, datetime, time, timedelta
-from typing import List, Optional, Sequence
+from datetime import date, datetime, time
+from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,7 +29,6 @@ from app.core.exceptions import (
 )
 from app.core.lock import LockKey, distributed_lock
 from app.core.response import ErrorCode, PageData
-from app.core.security import utc_now
 from app.models.booking import Booking
 from app.repositories.booking import BookingRepository
 from app.repositories.equipment import EquipmentRepository
@@ -40,7 +39,6 @@ from app.schemas.booking import (
     BookingResponse,
 )
 from app.services.notification import NotificationService
-from app.utils.url import to_static_url
 
 logger = logging.getLogger(__name__)
 

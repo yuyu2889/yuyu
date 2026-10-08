@@ -15,7 +15,7 @@
 """
 from typing import List, Optional, Sequence
 
-from sqlalchemy import Select, delete, func, or_, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import selectinload
 
 from app.models.collection import EquipmentCollection

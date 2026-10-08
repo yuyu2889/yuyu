@@ -19,7 +19,7 @@
 """
 import logging
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional
 
 from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,7 +35,7 @@ from app.core.cache import (
     set_json,
 )
 from app.core.enums import EquipmentStatus
-from app.core.exceptions import ConflictError, FileUploadError, NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.core.response import ErrorCode, PageData
 from app.models.equipment import Equipment
 from app.repositories.equipment import (

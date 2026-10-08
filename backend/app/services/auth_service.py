@@ -25,7 +25,6 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.enums import RoleCode, UserStatus
 from app.core.exceptions import AuthError, BusinessError, ConflictError, NotFoundError
 from app.core.response import ErrorCode
@@ -38,7 +37,7 @@ from app.core.security import (
     validate_password_strength,
     verify_password,
 )
-from app.models.user import User, UserToken
+from app.models.user import User
 from app.repositories.user import UserRepository, UserTokenRepository
 from app.schemas.user import (
     ChangePasswordRequest,

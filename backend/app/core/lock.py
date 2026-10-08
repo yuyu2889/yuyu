@@ -67,7 +67,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
 
 from app.core.cache import redis_client
-from app.core.exceptions import AppException, ConflictError
+from app.core.exceptions import ConflictError
 from app.core.response import ErrorCode
 
 logger = logging.getLogger(__name__)

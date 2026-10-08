@@ -34,7 +34,7 @@ FastAPI 依赖项（Dependency Injection）。
    只在"确实需要续期"时才写。
 """
 import logging
-from typing import Annotated, Callable, List, Optional
+from typing import Annotated, Callable, Optional
 
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -45,7 +45,7 @@ from app.core.enums import RoleCode
 from app.core.exceptions import AuthError, PermissionError_
 from app.core.response import ErrorCode
 from app.core.security import calc_token_expires_at, should_renew_token, utc_now
-from app.models.user import User, UserToken
+from app.models.user import User
 from app.repositories.user import UserRepository, UserTokenRepository
 from app.schemas.common import PageParams
 

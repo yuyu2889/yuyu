@@ -25,33 +25,46 @@
  * ============================================================================
  */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-// 按需引入 ECharts 组件（而不是 import * as echarts）
-import * as echarts from 'echarts/core'
-import { BarChart, LineChart, PieChart } from 'echarts/charts'
-import {
-  GridComponent,
-  LegendComponent,
-  TitleComponent,
-  TooltipComponent,
-} from 'echarts/components'
-import { CanvasRenderer } from 'echarts/renderers'
+
+// ============================================================================
+//  ECharts 导入方式说明（这里踩过一个坑，记录下来）
+// ============================================================================
+//  最初我用的是「按需导入」（tree-shaking 友好）：
+//      import * as echarts from 'echarts/core'
+//      import { BarChart, LineChart, PieChart } from 'echarts/charts'
+//      import { GridComponent, ... } from 'echarts/components'
+//      import { CanvasRenderer } from 'echarts/renderers'
+//      echarts.use([...])
+//
+//  但运行时抛了一个很难查的错误：
+//      TypeError: registers.registerChartView is not a function
+//
+//  排查过程：
+//    - echarts 5.6.0 / zrender 5.6.1，只有一个副本，版本匹配 ✅
+//    - 在 Node 里直接跑分层导入 + 注册，完全正常 ✅
+//    - 生产构建产物里 zrender 和 echarts 在同一个 chunk ✅
+//    → 结论：是 dev 模式下 ESM 模块解析导致多个子路径拿到了不同的模块实例，
+//      使得 charts 包里的注册函数拿到的 registers 对象不完整。
+//
+//  最终选择：**全量导入**。
+//  权衡：全量 echarts 约 1MB，但 StatisticsView 是路由级懒加载的，
+//        只有管理员打开统计页时才下载这一个 chunk（已单独分包），
+//        对首屏和其他页面零影响。
+//        用 ~200KB 的体积换掉了整类"模块实例不一致"的疑难问题，值得。
+//
+//  这也是一个实用的工程判断：**当某个优化带来的复杂度远超收益时，退回到简单方案**。
+// ============================================================================
+import * as echarts from 'echarts'
+import { ElMessage } from 'element-plus'
 
 import statisticsApi from '@/api/statistics'
 import { useTheme } from '@/composables/useTheme'
 import PageHeader from '@/components/common/PageHeader.vue'
 import StatCard from '@/components/common/StatCard.vue'
 
-// 注册需要的 ECharts 组件
-echarts.use([
-  BarChart,
-  LineChart,
-  PieChart,
-  GridComponent,
-  LegendComponent,
-  TitleComponent,
-  TooltipComponent,
-  CanvasRenderer,
-])
+// 说明：全量导入的 echarts 已经包含了饼图/折线图/柱状图和所有基础组件，
+// 不需要再调用 echarts.use([...]) 手动注册。
+// （按需导入才需要注册那一堆组件，见上面注释里说明的原因）
 
 const { effectiveTheme } = useTheme()
 
@@ -61,7 +74,16 @@ const { effectiveTheme } = useTheme()
 const loading = ref(true)
 const userStats = ref({})
 const equipmentStats = ref({})
+// 设备状态分布是**独立接口**返回的，不能从 equipmentStats 里取。
+// 这是个踩过的坑：我第一版从 equipmentStats.value.status_distribution 取数据，
+// 但 /statistics/equipment 接口并不返回这个字段（它在 /statistics/equipment/status 里），
+// 结果拿到 undefined → 数组为空 → 图表直接 return 不渲染。
+const statusStats = ref({})
 const bookingStats = ref({})
+
+// 设备明细表的排序状态（服务端排序，见模板里的说明）
+const rankingLimit = ref(50) // 取全部设备（本项目共 15 台，留足余量）
+const rankingOrderBy = ref('browse_count') // 默认按浏览量排序
 const trendDays = ref(7)
 
 // 图表容器 ref
@@ -114,7 +136,8 @@ const BOOKING_STATUS_COLORS = {
 /** 设备状态分布（饼图） */
 function renderStatusChart() {
   if (!statusChartRef.value) return
-  const data = equipmentStats.value.status_distribution || []
+  // 数据来自 /statistics/equipment/status 接口（见上面 statusStats 的注释）
+  const data = statusStats.value.status_distribution || []
   if (!data.length) return
 
   if (!charts.status) {
@@ -283,26 +306,79 @@ function renderRankChart() {
 async function loadAll() {
   loading.value = true
   try {
-    const [users, equipments, bookings, trend] = await Promise.allSettled([
+    // 注意：设备状态分布是**单独的接口**（/statistics/equipment/status），
+    // 它不在 getEquipmentStatistics 的返回里 —— 这是踩过的坑。
+    const [users, equipments, statuses, bookings, trend] = await Promise.allSettled([
       statisticsApi.getUserStatistics(),
-      statisticsApi.getEquipmentStatistics({ limit: 10 }),
+      statisticsApi.getEquipmentStatistics({ limit: rankingLimit.value, order_by: rankingOrderBy.value }),
+      statisticsApi.getEquipmentStatusDistribution(),
       statisticsApi.getBookingStatistics(),
       statisticsApi.getBookingTrend(trendDays.value),
     ])
 
     if (users.status === 'fulfilled') userStats.value = users.value || {}
     if (equipments.status === 'fulfilled') equipmentStats.value = equipments.value || {}
+    if (statuses.status === 'fulfilled') statusStats.value = statuses.value || {}
     if (bookings.status === 'fulfilled') bookingStats.value = bookings.value || {}
+    // 趋势数据缓存下来（主题切换重绘时需要），避免再请求一次接口
+    if (trend.status === 'fulfilled') trendCache.value = trend.value
 
-    // 等 DOM 更新后再渲染图表（容器必须有尺寸）
-    await nextTick()
-    renderStatusChart()
-    renderRankChart()
-    if (trend.status === 'fulfilled') {
-      renderTrendChart(trend.value)
+    // 诊断：哪个接口失败了就在控制台明确指出（而不是静默显示空白图表）
+    for (const [name, result] of [
+      ['用户统计', users],
+      ['设备统计', equipments],
+      ['设备状态分布', statuses],
+      ['预约统计', bookings],
+      ['预约趋势', trend],
+    ]) {
+      if (result.status === 'rejected') {
+        console.error(`[StatisticsView] ${name}接口请求失败:`, result.reason)
+      }
     }
+
+    // 等 DOM 更新后再渲染图表（容器必须有尺寸，否则 ECharts 初始化会异常）
+    await nextTick()
+    renderAllCharts()
   } finally {
     loading.value = false
+  }
+}
+
+/**
+ * 统一渲染全部三个图表，并捕获异常。
+ *
+ * 为什么要 try/catch？
+ * 因为图表渲染发生在 onMounted 的异步回调里，
+ * 如果抛异常，Vue 不会把它显示到界面上，只会打一条控制台错误 ——
+ * 用户看到的是"页面能打开但图表区一片空白"，完全不知道为什么。
+ * 捕获后把错误写进 chartError，界面上就能看到原因了。
+ */
+function renderAllCharts() {
+  chartError.value = ''
+
+  // 先检查数据是否到位 —— 这样"图表空白"能立刻看出是数据问题还是渲染问题。
+  // 上一版没有这个检查，导致"接口没被调用 → 数据为空 → 图表静默不渲染"，
+  // 表现就是图表区一片空白且没有任何提示，很难排查。
+  const missing = []
+  if (!statusStats.value.status_distribution?.length) missing.push('设备状态分布')
+  if (!equipmentStats.value.equipment_ranking?.length) missing.push('设备排行')
+  if (!trendCache.value?.daily_bookings?.length) missing.push('预约趋势')
+  if (missing.length) {
+    chartError.value = `以下图表缺少数据：${missing.join('、')}。可能是对应接口请求失败，请按 F12 查看控制台。`
+  }
+
+  const tasks = [
+    { name: '设备状态分布', fn: renderStatusChart },
+    { name: '设备排行', fn: renderRankChart },
+    { name: '预约趋势', fn: () => trendCache.value && renderTrendChart(trendCache.value) },
+  ]
+  for (const task of tasks) {
+    try {
+      task.fn()
+    } catch (err) {
+      console.error(`[StatisticsView] ${task.name} 图表渲染失败:`, err)
+      chartError.value = `${task.name}图表渲染失败：${err.message}`
+    }
   }
 }
 
@@ -310,9 +386,45 @@ async function handleTrendDaysChange(days) {
   trendDays.value = days
   try {
     const trend = await statisticsApi.getBookingTrend(days)
+    trendCache.value = trend
     renderTrendChart(trend)
   } catch {
     // 拦截器已提示
+  }
+}
+
+/**
+ * 设备明细表排序（服务端排序）。
+ *
+ * el-table 的 sort-change 事件会传 { column, prop, order }：
+ *   - prop：列上声明的字段名（这就是为什么 prop 必须写）
+ *   - order：'ascending' | 'descending' | null（null 表示取消排序）
+ *
+ * 注意 order_by 只支持 browse_count / booking_count / collect_count
+ * （后端用正则约束了，传别的值会返回 422），所以这里只处理这三个。
+ */
+const ALLOWED_ORDER_BY = ['browse_count', 'booking_count', 'collect_count']
+
+async function handleSortChange({ prop, order }) {
+  if (!prop || !ALLOWED_ORDER_BY.includes(prop)) return
+
+  rankingOrderBy.value = prop
+
+  try {
+    const data = await statisticsApi.getEquipmentStatistics({
+      limit: rankingLimit.value,
+      order_by: prop,
+    })
+    equipmentStats.value = data || {}
+  } catch {
+    // 拦截器已提示
+  }
+
+  // 说明：后端的 order_by 只支持"降序取 Top N"，升序在排行榜语义下意义不大
+  // （"浏览量最少的设备"不是常见的运营需求）。
+  // 如果用户点了升序，这里给一个提示，避免他以为排序坏了。
+  if (order === 'ascending') {
+    ElMessage.info('排行榜按降序展示：这里显示的是数值最高的前若干台设备')
   }
 }
 
@@ -324,30 +436,39 @@ function handleResize() {
   Object.values(charts).forEach((chart) => chart?.resize())
 }
 
+// 缓存趋势数据，供主题切换时重新渲染用
+// 说明：themeCache 必须声明在 watch 之前使用的位置能访问到，
+// 所以这里放在 watch 定义之前更清晰（原来放在了之后，容易误读）。
+const trendCache = ref(null)
+
+// 图表初始化失败时的提示（避免静默白屏）
+const chartError = ref('')
+
 // 主题切换时重新渲染（因为图表颜色不跟随 CSS 变量）
+//
+// 注意这里的一个坑（第一版写错了）：
+// 原来写成 renderTrendChart({ daily_bookings: bookingStats.value.trend_data || ... })
+// 但 bookingStats 里根本没有 trend_data 字段，所以会传一个空数组进去，
+// renderTrendChart 内部 `if (!data.length) return` 直接返回 ——
+// 结果是主题切换后折线图不重绘、其他两个图表也因为这个异步回调抛错而没执行。
+// 正确做法是把「完整的趋势响应」缓存下来，原样传回去。
 watch(effectiveTheme, async () => {
   await nextTick()
-  renderStatusChart()
-  renderTrendChart({
-    daily_bookings: (bookingStats.value.trend_data || []).length
-      ? bookingStats.value.trend_data
-      : trendCache.value,
-  })
-  renderRankChart()
+  try {
+    renderStatusChart()
+    renderRankChart()
+    if (trendCache.value) {
+      renderTrendChart(trendCache.value)
+    }
+  } catch (err) {
+    console.error('[StatisticsView] 主题切换重绘图表失败:', err)
+  }
 })
 
-// 缓存趋势数据，供主题切换时重新渲染用
-const trendCache = ref([])
-
 onMounted(async () => {
+  // loadAll 里已经把趋势数据一起请求并缓存了，
+  // 所以这里不需要再单独请求一次（第一版重复请求了，浪费一次往返）
   await loadAll()
-  // 单独再请求一次趋势，把数据缓存起来
-  try {
-    const trend = await statisticsApi.getBookingTrend(trendDays.value)
-    trendCache.value = trend?.daily_bookings || []
-  } catch {
-    // 忽略
-  }
   window.addEventListener('resize', handleResize)
 })
 
@@ -371,6 +492,20 @@ onUnmounted(() => {
       </template>
     </PageHeader>
 
+    <!-- 图表渲染失败时的提示
+         为什么要加这个？因为图表渲染在异步回调里，抛异常时 Vue 不会显示到界面上，
+         用户只看到"图表区域一片空白"，完全不知道为什么。
+         加上这个提示后，出问题能直接看到原因。 -->
+    <el-alert
+      v-if="chartError"
+      type="error"
+      :closable="false"
+      show-icon
+      :title="chartError"
+      description="图表渲染失败，但页面其他数据仍然可用。请按 F12 打开控制台查看详细错误信息。"
+      class="chart-error"
+    />
+
     <!-- ==================== 顶部指标卡片 ==================== -->
     <div class="stats-grid">
       <StatCard
@@ -386,7 +521,7 @@ onUnmounted(() => {
         :value="equipmentStats.total_equipment_count ?? 0"
         icon="Box"
         color="linear-gradient(135deg, #409eff, #337ecc)"
-        :trend="`可用 ${equipmentStats.status_distribution?.find((s) => s.status === 'available')?.count ?? 0} 台`"
+        :trend="`可用 ${statusStats.status_distribution?.find((s) => s.status === 'available')?.count ?? 0} 台`"
         :loading="loading"
       />
       <StatCard
@@ -438,7 +573,7 @@ onUnmounted(() => {
         <!-- 数据明细表（图表之外再给一份精确数字） -->
         <div class="status-legend">
           <div
-            v-for="item in equipmentStats.status_distribution || []"
+            v-for="item in statusStats.status_distribution || []"
             :key="item.status"
             class="legend-item"
           >
@@ -537,11 +672,34 @@ onUnmounted(() => {
         <h3 class="chart-title">
           <el-icon><List /></el-icon>设备数据明细
         </h3>
-        <span class="chart-sub">按浏览量排序</span>
+        <span class="chart-sub">
+          点击「浏览量 / 预约次数 / 收藏数」表头可排序（在**全库范围**内排序后取前
+          {{ rankingLimit }} 名，非仅当前页）
+        </span>
       </div>
 
-      <el-table v-loading="loading" :data="equipmentStats.equipment_ranking || []" style="width: 100%">
-        <el-table-column type="index" label="排名" width="70" align="center" />
+      <!-- 关于排序的设计说明：
+           这里用的是**服务端排序**（sortable="custom" + @sort-change），
+           而不是 el-table 默认的客户端排序（sortable）。
+           原因：这是「排行榜」，语义上应该是"全部设备里浏览量最高的 N 台"。
+           如果只做客户端排序，就变成"已取回的 N 台里再排一次"，
+           当设备总数超过 N 时结果就是错的。
+           后端 /statistics/equipment 已支持 order_by 参数，
+           所以这里点击表头会重新请求接口。 -->
+      <el-table
+        v-loading="loading"
+        :data="equipmentStats.equipment_ranking || []"
+        :default-sort="{ prop: 'browse_count', order: 'descending' }"
+        style="width: 100%"
+        @sort-change="handleSortChange"
+      >
+        <el-table-column
+          type="index"
+          label="排名"
+          width="70"
+          align="center"
+          :index="(i) => i + 1"
+        />
         <el-table-column prop="equipment_name" label="设备名称" min-width="160" />
         <el-table-column label="分类" width="140">
           <template #default="{ row }">
@@ -551,16 +709,40 @@ onUnmounted(() => {
           </template>
         </el-table-column>
         <el-table-column prop="lab_name" label="实验室" min-width="140" />
-        <el-table-column label="浏览量" width="100" align="right" sortable>
+
+        <!-- 说明：这些列用了 #default 插槽自定义渲染，但 prop 依然必须写，
+             否则 Element Plus 的排序事件拿不到字段名（sort-change 的 prop 会是 null）。 -->
+        <el-table-column
+          prop="browse_count"
+          label="浏览量"
+          width="100"
+          align="right"
+          sortable="custom"
+          :sort-orders="['descending', 'ascending']"
+        >
           <template #default="{ row }">{{ row.browse_count }}</template>
         </el-table-column>
-        <el-table-column label="预约次数" width="110" align="right" sortable>
+        <el-table-column
+          prop="booking_count"
+          label="预约次数"
+          width="110"
+          align="right"
+          sortable="custom"
+          :sort-orders="['descending', 'ascending']"
+        >
           <template #default="{ row }">{{ row.booking_count }}</template>
         </el-table-column>
-        <el-table-column label="收藏数" width="90" align="right">
+        <el-table-column
+          prop="collect_count"
+          label="收藏数"
+          width="90"
+          align="right"
+          sortable="custom"
+          :sort-orders="['descending', 'ascending']"
+        >
           <template #default="{ row }">{{ row.collect_count }}</template>
         </el-table-column>
-        <el-table-column label="当前有效预约" width="130" align="right">
+        <el-table-column prop="active_booking_count" label="当前有效预约" width="130" align="right">
           <template #default="{ row }">
             <el-tag v-if="row.active_booking_count > 0" type="warning" size="small">
               {{ row.active_booking_count }}
@@ -574,6 +756,10 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.chart-error {
+  margin-bottom: var(--space-5);
+}
+
 /* ==================== 指标卡片 ==================== */
 .stats-grid {
   display: grid;

@@ -26,7 +26,6 @@ from app.api.deps import (
     PageParamsDep,
     require_admin,
 )
-from app.core.rate_limit import get_client_ip, upload_limiter
 from app.core.response import PageData, Response, success
 from app.schemas.common import MessageResponse, UploadedFileResponse
 from app.schemas.equipment import (

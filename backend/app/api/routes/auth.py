@@ -23,8 +23,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from app.api.deps import ClientInfoDep, CurrentUser, DbSession
 from app.core.config import settings
 from app.core.rate_limit import get_client_ip, login_limiter, register_limiter
-from app.core.response import ErrorCode, Response, success
-from app.core.security import utc_now
+from app.core.response import Response, success
 from app.schemas.user import (
     LoginResponse,
     UserLoginRequest,

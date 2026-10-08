@@ -24,6 +24,7 @@ import { ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { useTheme } from '@/composables/useTheme'
 import { STORAGE_KEYS } from '@/config/constants'
+import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -257,11 +258,14 @@ onUnmounted(() => {
 
       <!-- 内容区 -->
       <main class="content">
-        <router-view v-slot="{ Component }">
-          <transition name="fade" mode="out-in">
-            <component :is="Component" />
-          </transition>
-        </router-view>
+        <!-- 错误边界：页面组件崩溃时显示错误信息，而不是整页白屏 -->
+        <ErrorBoundary>
+          <router-view v-slot="{ Component }">
+            <transition name="fade" mode="out-in">
+              <component :is="Component" />
+            </transition>
+          </router-view>
+        </ErrorBoundary>
       </main>
     </div>
   </div>

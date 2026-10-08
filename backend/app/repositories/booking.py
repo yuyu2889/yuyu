@@ -24,16 +24,21 @@
 from datetime import date, time
 from typing import Optional, Sequence
 
-from sqlalchemy import Select, and_, func, or_, select, update
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy.orm import joinedload
 
-from app.core.enums import BOOKING_ACTIVE_STATUSES, BookingStatus
+from app.core.enums import (
+    BOOKING_ACTIVE_STATUS_VALUES,
+    BookingStatus,
+)
 from app.models.booking import Booking
 from app.models.equipment import Equipment
 from app.repositories.base import BaseRepository
 
-# 有效占用状态的值列表（用于 SQL 的 IN 查询）
-ACTIVE_STATUS_VALUES = [s.value for s in BOOKING_ACTIVE_STATUSES]
+# 说明：有效占用状态的「字符串列表」现在统一在 core/enums.py 里定义
+# （BOOKING_ACTIVE_STATUS_VALUES），不再在本文件重复定义。
+# 这里保留一个短别名，让下面 7 处 .in_(ACTIVE_STATUS_VALUES) 的调用保持简洁。
+ACTIVE_STATUS_VALUES = BOOKING_ACTIVE_STATUS_VALUES
 
 
 class BookingRepository(BaseRepository[Booking]):

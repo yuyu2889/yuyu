@@ -82,6 +82,26 @@ BOOKING_STATUS_TRANSITIONS: dict[BookingStatus, set[BookingStatus]] = {
 # 不会与"未来的新预约"产生冲突（新预约的日期必然 >= 今天）。
 BOOKING_ACTIVE_STATUSES = (BookingStatus.PENDING, BookingStatus.APPROVED)
 
+# 上面常量的「字符串形式」，专供 SQL 查询使用（数据库里存的是字符串）。
+#
+# 为什么要在这个模块里统一定义？
+# 因为它曾经被散落在三处使用：
+#   - repositories/booking.py      用了本地定义的 ACTIVE_STATUS_VALUES
+#   - repositories/equipment.py    硬编码 ["pending", "approved"]
+#   - services/statistics_service.py  写 BookingStatus.PENDING.value, .APPROVED.value
+# 一旦业务变化（比如新增一个也算"占用"的状态），必须记得改三处，
+# 漏掉任何一处就会出现「设备列表显示的预约数」和「统计页的预约数」对不上
+# —— 这是典型的静默数据不一致，而且很难被发现。
+# 现在统一从这里导入，「哪些状态算有效」只有这一个地方说了算。
+BOOKING_ACTIVE_STATUS_VALUES: list[str] = [s.value for s in BOOKING_ACTIVE_STATUSES]
+
+# 超时未审核的处理方式：
+# 定时任务会把「预约日期已过、但仍处于待审核」的预约自动取消。
+# 为什么需要这个？因为定时任务原本只处理 approved 状态的预约（把过期的标记为已完成），
+# pending 的预约永远不会流转 —— 一条几个月前的待审核预约会永远算作"当前有效预约"，
+# 让这个统计数字虚高。
+BOOKING_TIMEOUT_CANCEL_REASON = "超过预约日期仍未审核，系统自动取消"
+
 
 def can_transition(from_status: BookingStatus, to_status: BookingStatus) -> bool:
     """

@@ -18,9 +18,10 @@
 """
 from typing import Optional, Sequence
 
-from sqlalchemy import Select, func, or_, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import selectinload
 
+from app.core.enums import BOOKING_ACTIVE_STATUS_VALUES
 from app.models.booking import Booking
 from app.models.collection import EquipmentCollection
 from app.models.equipment import Equipment, EquipmentCategory, Laboratory
@@ -214,12 +215,14 @@ class EquipmentRepository(BaseRepository[Equipment]):
         )
 
         # 当前有效预约数子查询（pending + approved）
+        # 注意：状态列表从 core/enums.py 统一导入，不要在这里硬编码 ["pending", "approved"]。
+        # 硬编码会导致「哪个状态算有效」在多处各说各话，业务一变就出现数据不一致。
         booking_sq = (
             select(
                 Booking.equipment_id.label("equipment_id"),
                 func.count(Booking.id).label("active_booking_count"),
             )
-            .where(Booking.status.in_(["pending", "approved"]))
+            .where(Booking.status.in_(BOOKING_ACTIVE_STATUS_VALUES))
             .group_by(Booking.equipment_id)
             .subquery()
         )

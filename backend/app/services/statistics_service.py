@@ -36,12 +36,17 @@
 import logging
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Dict, List
+from typing import Dict
 
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import BookingStatus, EquipmentStatus, RoleCode
+from app.core.enums import (
+    BOOKING_ACTIVE_STATUS_VALUES,
+    BookingStatus,
+    EquipmentStatus,
+    RoleCode,
+)
 from app.core.security import utc_now
 from app.models.booking import Booking
 from app.models.collection import EquipmentCollection
@@ -162,16 +167,18 @@ class StatisticsService:
             .subquery()
         )
 
+        # 「当前有效预约」= 该设备下状态为 pending 或 approved 的预约条数。
+        #
+        # 这里曾经写成 BookingStatus.PENDING.value, BookingStatus.APPROVED.value，
+        # 属于「枚举用对了但没复用常量」—— 同一个业务概念在三个文件里各写一遍。
+        # 现在统一从 core/enums.py 的 BOOKING_ACTIVE_STATUS_VALUES 导入，
+        # 保证和「设备列表的预约数」「冲突检测的状态范围」永远一致。
         active_sq = (
             select(
                 Booking.equipment_id.label("eid"),
                 func.count(Booking.id).label("cnt"),
             )
-            .where(
-                Booking.status.in_(
-                    [BookingStatus.PENDING.value, BookingStatus.APPROVED.value]
-                )
-            )
+            .where(Booking.status.in_(BOOKING_ACTIVE_STATUS_VALUES))
             .group_by(Booking.equipment_id)
             .subquery()
         )

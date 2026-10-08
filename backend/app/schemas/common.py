@@ -14,7 +14,7 @@ Schemas 层（DTO，数据传输对象）的职责：
 3. 校验：数据库只管类型，Pydantic 能管"长度 2-20 字符""必须是合法邮箱"。
 """
 from datetime import datetime
-from typing import Generic, Optional, TypeVar
+from typing import TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 

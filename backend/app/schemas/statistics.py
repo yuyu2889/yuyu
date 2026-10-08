@@ -20,7 +20,7 @@ V2 的做法：加 `last_used_at` 字段，每次认证成功时更新，
 而不是"能算出来就用"。很多项目的数据看板都有这类"看起来有数据、
 实际口径错了"的问题。
 """
-from datetime import date, datetime
+from datetime import datetime
 from typing import List, Optional
 
 from pydantic import Field

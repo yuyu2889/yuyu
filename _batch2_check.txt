@@ -1,0 +1,90 @@
+====================================================================
+  第 2 批接口验证：认证 / 权限 / 设备 / 图片上传
+====================================================================
+
+【1】健康检查  HTTP 200  状态=ok  数据库=True  Redis=True
+
+【2】管理员登录  HTTP 200
+     用户名   = admin
+     姓名     = 张管理员
+     角色     = ['admin']
+     is_admin = True
+     有效期   = 604800 秒（7.0 天）
+
+【3】学生登录    HTTP 200  姓名=张同学  is_admin=False
+
+【4】防用户名枚举验证
+     密码错误    -> HTTP 401  message=用户名或密码错误
+     用户不存在  -> HTTP 401  message=用户名或密码错误
+     两者提示一致 = True（一致才能防止攻击者枚举出系统里存在哪些用户名）
+
+【5】注册参数校验（验证错误格式是否统一）
+     HTTP 422  code=1000
+     message = username: String should have at least 4 characters；password: String should have at least 8 characters；real_name: String should have at least 2 charact
+
+【6】权限控制验证（学生访问管理员接口）
+     HTTP 403  code=1003  message=权限不足，该操作需要以下角色之一：admin
+     不带 Token 访问 -> HTTP 401  message=请先登录
+     管理员访问      -> HTTP 200  code=0  用户总数=9
+
+【7】设备分类（Redis 缓存）HTTP 200  分类数=6
+     1. 电子测量仪器（7 台设备）
+     2. 计算机设备（0 台设备）
+     3. 物理实验设备（2 台设备）
+     4. 化学实验设备（0 台设备）
+
+【8】设备列表  HTTP 200  总数=15  总页数=5  本页=3 条  还有更多=True
+     #15 工业级3D打印机 | 机械工程设备 | 状态=available | 图片=/static/uploads/equipment/seed/EQ2026015.svg
+     #14 五轴加工中心 | 机械工程设备 | 状态=maintenance | 图片=/static/uploads/equipment/seed/EQ2026014.svg
+     #13 数控车床 | 机械工程设备 | 状态=available | 图片=/static/uploads/equipment/seed/EQ2026013.svg
+     按状态筛选 maintenance -> 2 台
+     关键字筛选「示波器」  -> 2 台
+
+【9】设备详情（浏览量原子自增）
+     第一次访问：浏览量=44  是否已收藏=False
+     登录后访问：浏览量=45  是否已收藏=False（登录用户会额外返回收藏状态）
+     图片路径  ：/static/uploads/equipment/seed/1cf2688f9ad1.jpg（已转换成前端可直接使用的形式）
+
+【10】收藏功能
+     检查收藏(equipment_id=2) -> HTTP 200  is_collected=False
+     添加收藏 -> HTTP 201  message=收藏成功
+     重复收藏 -> HTTP 409  code=3005  message=该设备已在收藏列表中（应被拒绝）
+     收藏列表 -> 共 1 条
+        第一条：频谱分析仪  图片=/static/uploads/equipment/seed/057466bbe98c.jpg
+     取消收藏 -> HTTP 200  message=取消收藏成功
+     重复取消 -> HTTP 404  code=3006  message=收藏记录不存在（应提示不存在）
+
+【11】上传合法 JPEG -> HTTP 200
+     返回 URL  = /static/uploads/equipment/2026/10/c116df8f73194e0aaaf950a3535543a2.jpg
+     存储路径  = uploads/equipment/2026/10/c116df8f73194e0aaaf950a3535543a2.jpg（数据库里存的是相对路径）
+     真实类型  = image/jpeg
+     文件大小  = 222 字节
+
+【12】上传伪装成 .jpg 的可执行文件（安全关键测试）
+     HTTP 400  code=5002
+     message = 无法识别的图片格式，请上传 JPG / PNG / GIF / WebP 格式的图片
+     结论    = 已拦截 ✓（读文件头识别出真实类型）
+
+【13】上传 6MB 文件（限制 5MB）
+     HTTP 400  code=5001  message=文件大小 6.0MB 超出限制（最大 5MB）
+
+【14】访问上传的图片静态资源
+     URL       = http://127.0.0.1:8001/static/uploads/equipment/2026/10/c116df8f73194e0aaaf950a3535543a2.jpg
+     HTTP 200  Content-Type=image/jpeg  大小=222 字节
+     文件头    = ff d8 ff（应为 ff d8 ff，说明是真实 JPEG）
+
+【15】管理员尝试禁用自己（防呆检查）
+     HTTP 400  code=2007  message=不能禁用自己的账号
+
+【16】修改密码（改完旧 Token 应失效）
+     修改密码 -> HTTP 200  message=密码修改成功，请使用新密码重新登录
+     用旧 Token 访问 -> HTTP 401  message=登录凭证已失效，请重新登录
+     结论 = 旧 Token 已失效 ✓（这是 UUID Token 相对 JWT 的核心优势）
+     密码已改回 Student@123 -> HTTP 200
+
+【17】登出  HTTP 200  message=已退出登录
+     登出后用原 Token 访问 -> HTTP 401  message=登录凭证已失效，请重新登录
+
+====================================================================
+  验证结束
+====================================================================

@@ -48,10 +48,16 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import clear_equipment_cache
-from app.core.enums import BookingStatus, EquipmentStatus
+from app.core.enums import (
+    BOOKING_TIMEOUT_CANCEL_REASON,
+    BookingStatus,
+    EquipmentStatus,
+    can_transition,
+)
 from app.core.lock import LockKey, RedisLock
 from app.models.booking import Booking
 from app.models.equipment import Equipment
+from app.repositories.booking import BookingRepository
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +67,12 @@ class EquipmentSyncService:
 
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+        # 预约数据访问：用于把超时的 pending 预约流转为 cancelled
+        self.repo = BookingRepository(db)
 
     async def sync_equipment_status(self) -> dict:
         """
-        执行一次设备状态同步。
+        执行一次设备状态同步（以及超时预约清理）。
 
         :return: 统计信息（便于日志和监控）
         """
@@ -76,6 +84,7 @@ class EquipmentSyncService:
             "completed": 0,        # 标记完成的预约数
             "counted": 0,          # 累加预约次数的设备数
             "fixed_by_fallback": 0,  # 兜底扫描修正的设备数
+            "timeout_cancelled": 0,  # 超时未审核被自动取消的预约数
         }
 
         try:
@@ -133,7 +142,41 @@ class EquipmentSyncService:
                         stats["counted"] += 1
                         changed_equipment_ids.add(equipment.id)
 
-            # ==================== 第 2 步：兜底反向扫描 ====================
+            # ==================== 第 2 步：清理超时未审核的 pending 预约 ====================
+            #
+            # 为什么需要这一步？
+            # 定时任务原本只处理 approved 状态（把过期的标记为 completed），
+            # pending 的预约永远不会被流转 —— 于是一条几个月前提交、一直没被审核的预约
+            # 会永远被算进「当前有效预约」里，让这个统计数字虚高。
+            #
+            # 为什么放在设备状态处理之后？
+            # 因为下面第 3 步的兜底扫描只关心 approved 状态的设备占用情况，
+            # 而 pending 预约并不占用设备，所以取消它们不影响设备状态，
+            # 不需要额外清理设备缓存。
+            #
+            # 判定条件：预约日期 < 今天（用日期比较而不是时间比较）
+            # 为什么用"日期已过"而不是"结束时间已过"？
+            # 因为"今天"的 pending 预约仍然有可能被管理员批准并使用，
+            # 直接取消会误伤正常业务。只有整天的日期都过去了，这条预约才确定作废。
+            timeout_stmt = select(Booking).where(
+                Booking.status == BookingStatus.PENDING.value,
+                Booking.booking_date < now.date(),
+            )
+            timeout_bookings = (await self.db.execute(timeout_stmt)).scalars().all()
+
+            for booking in timeout_bookings:
+                # 走状态机校验，保证流转合法（pending -> cancelled 是允许的）
+                if not can_transition(BookingStatus(booking.status), BookingStatus.CANCELLED):
+                    continue
+                # 用 UPDATE 语句而不是改对象属性：一条 SQL 搞定，并发下更安全
+                await self.repo.update_status(
+                    booking_id=booking.id,
+                    new_status=BookingStatus.CANCELLED,
+                    audit_note=BOOKING_TIMEOUT_CANCEL_REASON,
+                )
+                stats["timeout_cancelled"] += 1
+
+            # ==================== 第 3 步：兜底反向扫描 ====================
             # 找出所有 busy 但已经没有进行中预约的设备，恢复为 available。
             # 这一步是为了修正"预约被取消/服务中断/人工改错"导致的脏状态。
             busy_stmt = select(Equipment).where(Equipment.status == EquipmentStatus.BUSY.value)
@@ -157,7 +200,7 @@ class EquipmentSyncService:
                     stats["fixed_by_fallback"] += 1
                     changed_equipment_ids.add(equipment.id)
 
-            # ==================== 第 3 步：提交并清缓存 ====================
+            # ==================== 第 4 步：提交并清缓存 ====================
             await self.db.commit()
 
             # 只有状态真正变化的设备才清缓存（避免无意义的 Redis 操作）
@@ -167,13 +210,15 @@ class EquipmentSyncService:
             total_changes = (
                 stats["set_busy"] + stats["set_available"]
                 + stats["completed"] + stats["fixed_by_fallback"]
+                + stats["timeout_cancelled"]
             )
             if total_changes > 0:
                 logger.info(
                     "设备状态同步完成 | 扫描 %d 条预约 | 变为使用中 %d | 恢复可用 %d | "
-                    "标记完成 %d | 累加次数 %d | 兜底修正 %d",
+                    "标记完成 %d | 累加次数 %d | 兜底修正 %d | 超时取消 %d",
                     stats["scanned"], stats["set_busy"], stats["set_available"],
                     stats["completed"], stats["counted"], stats["fixed_by_fallback"],
+                    stats["timeout_cancelled"],
                 )
             else:
                 logger.debug("设备状态同步完成，无变化 | 扫描 %d 条预约", stats["scanned"])
