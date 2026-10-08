@@ -6,17 +6,21 @@ API 路由汇总。
 """
 from fastapi import APIRouter
 
-from app.api.routes import health
+from app.api.routes import auth, equipment, health, users
 
 # 总路由：所有业务接口都挂在 API_PREFIX 下（在 main.py 里设置）
 api_router = APIRouter()
 
+# ---------- 健康检查 ----------
 api_router.include_router(health.router)
 
+# ---------- 认证与用户 ----------
+api_router.include_router(auth.router)
+api_router.include_router(users.router)
+
+# ---------- 设备相关 ----------
+api_router.include_router(equipment.router)
+
 # 后续批次会在这里追加：
-# api_router.include_router(auth.router)          # 认证
-# api_router.include_router(users.router)         # 用户
-# api_router.include_router(equipment.router)     # 设备
-# api_router.include_router(bookings.router)      # 预约
-# api_router.include_router(statistics.router)    # 统计
-# api_router.include_router(upload.router)        # 文件上传
+# api_router.include_router(bookings.router)    # 第 3 批：预约
+# api_router.include_router(statistics.router)  # 第 4 批：统计

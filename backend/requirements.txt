@@ -21,6 +21,9 @@ python-multipart==0.0.20
 pydantic==2.10.6
 pydantic-settings==2.7.1
 python-dotenv==1.0.1
+# Pydantic 的 EmailStr 类型需要这个包才能做邮箱格式校验。
+# 不装的话，模型定义阶段就会报 ImportError: email-validator is not installed。
+email-validator==2.2.0
 
 # ---------- 数据库 ----------
 # SQLAlchemy 2.0 的异步 API + aiomysql 驱动
