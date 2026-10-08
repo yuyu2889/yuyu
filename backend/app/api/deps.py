@@ -124,24 +124,46 @@ async def get_current_user(
     if not user.is_active:
         raise AuthError(ErrorCode.USER_DISABLED, "账号已被禁用，请联系管理员")
 
-    # ---------- 5. 滑动续期 ----------
-    # 只在"确实需要续期"时才写库，避免每个请求都产生一次 UPDATE
+    # ---------- 5. 滑动续期 + 活跃时间更新 ----------
     now = utc_now()
+    need_commit = False
+
+    # 5.1 滑动续期：只在"快过期"时才延长
     if should_renew_token(db_token.expires_at):
         old_expires = db_token.expires_at
         db_token.expires_at = calc_token_expires_at()
-        db_token.last_used_at = now
-        await token_repo.commit()
+        need_commit = True
         logger.info(
             "Token 已自动续期 | user=%s | %s -> %s",
             user.username, old_expires, db_token.expires_at,
         )
-    else:
-        # 更新"最后使用时间"用于活跃度统计。
-        # 这里有个优化点：如果每个请求都 UPDATE last_used_at，
-        # 会给数据库带来不必要的写入压力。生产环境可以改成
-        # 「同一分钟内只更新一次」或异步批量更新。
+
+    # 5.2 更新最后使用时间（用于"活跃用户"统计）
+    #
+    # ⚠️ 这里有两个坑，都踩过：
+    #
+    # 坑 1：只改内存不 commit，改动就会丢。
+    #   第一版我只写了 `db_token.last_used_at = now`，没有 commit，
+    #   而 get_db() 在请求结束时只 close 不提交，
+    #   结果数据库里 last_used_at 一直是 NULL，
+    #   统计接口的"近30天活跃用户"永远是 0。
+    #
+    # 坑 2：不能每个请求都 UPDATE。
+    #   每次请求写一次数据库，在 QPS 高的时候是纯粹的浪费
+    #   （登录态检查本身是读多写少的场景）。
+    #   所以加了节流：同一分钟内只更新一次。
+    #   代价是"活跃时间"的精度是分钟级，对统计完全够用。
+    #   生产环境更彻底的做法是异步批量刷盘（把变更攒起来定期写）。
+    ACTIVE_TIME_UPDATE_INTERVAL_SECONDS = 60
+
+    if db_token.last_used_at is None or (
+        now - db_token.last_used_at
+    ).total_seconds() >= ACTIVE_TIME_UPDATE_INTERVAL_SECONDS:
         db_token.last_used_at = now
+        need_commit = True
+
+    if need_commit:
+        await token_repo.commit()
 
     return user
 

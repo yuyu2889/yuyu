@@ -173,9 +173,13 @@ class AuthService:
         """
         校验 Token 并返回用户（带滑动续期）。
 
-        这个方法被 deps.get_current_user 调用。
-        抽到 service 层的好处是：Token 的续期策略、撤销检查等业务规则
-        集中在这里，而 deps 只负责"从请求里取值"和"抛 HTTP 异常"。
+        注意：这个方法是给"非 HTTP 场景"（比如脚本、定时任务）用的。
+        HTTP 请求的 Token 校验走 app/api/deps.py 的 get_current_user，
+        那里的实现更完整（有一次性的活跃时间节流更新）。
+
+        这个方法保留是为了：
+        1. 业务逻辑可以脱离 FastAPI 依赖单独测试
+        2. 将来加 gRPC/CLI 入口时可以复用
         """
         db_token = await self.token_repo.get_by_token(token_value)
         if db_token is None or db_token.is_revoked:
@@ -191,11 +195,22 @@ class AuthService:
         # 滑动续期：剩余时间不足总时长的 50% 时自动延长
         from app.core.security import should_renew_token
 
+        need_commit = False
         if should_renew_token(db_token.expires_at):
             db_token.expires_at = calc_token_expires_at()
+            need_commit = True
+
+        # 更新活跃时间（同样做节流，理由见 deps.get_current_user）
+        now = utc_now()
+        if db_token.last_used_at is None or (
+            now - db_token.last_used_at
+        ).total_seconds() >= 60:
+            db_token.last_used_at = now
+            need_commit = True
+
+        if need_commit:
             await self.db.commit()
 
-        db_token.last_used_at = utc_now()
         return user
 
     # ====================== 登出 ======================

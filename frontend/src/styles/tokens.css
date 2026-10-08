@@ -1,0 +1,257 @@
+/* ============================================================================
+   设计令牌（Design Tokens）
+   ============================================================================
+   这是前端"看起来专业"的关键：所有颜色、间距、圆角、阴影、字号
+   都定义成 CSS 变量，组件里只引用变量，不写死具体值。
+
+   为什么这么做？（面试可以讲）
+   1. **换肤只需改变量**：深色模式就是把 :root 里的一批变量换掉，
+      不需要改任何组件代码
+   2. **一致性**：不会出现"这里用 #409EFF、那里用 #409eff、还有一处用 #3a8ee6"
+      这种同一个颜色三种写法的混乱（原项目就有这个问题）
+   3. **可维护**：要整体调大圆角，改一个变量就行
+   ============================================================================ */
+
+:root {
+  /* ---------- 主色与语义色 ----------
+     只定义"色相"，具体深浅由下面的等级控制 */
+  --color-primary: #409eff;
+  --color-primary-light: #66b1ff;
+  --color-primary-dark: #337ecc;
+  --color-primary-pale: #ecf5ff;
+
+  --color-success: #67c23a;
+  --color-success-pale: #f0f9eb;
+  --color-warning: #e6a23c;
+  --color-warning-pale: #fdf6ec;
+  --color-danger: #f56c6c;
+  --color-danger-pale: #fef0f0;
+  --color-info: #909399;
+  --color-info-pale: #f4f4f5;
+
+  /* ---------- 中性色（按明度分级） ---------- */
+  --color-text-primary: #1f2937;    /* 标题、重要文字 */
+  --color-text-regular: #4b5563;    /* 正文 */
+  --color-text-secondary: #6b7280;  /* 次要说明 */
+  --color-text-placeholder: #9ca3af;/* 占位符、禁用 */
+  --color-text-inverse: #ffffff;
+
+  --color-border: #e5e7eb;
+  --color-border-light: #f3f4f6;
+  --color-bg-page: #f5f7fa;         /* 页面背景 */
+  --color-bg-card: #ffffff;         /* 卡片背景 */
+  --color-bg-hover: #f9fafb;
+
+  /* ---------- 间距（8px 栅格）----------
+     统一用 8 的倍数，视觉节奏会整齐很多 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* ---------- 圆角 ---------- */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+
+  /* ---------- 阴影（三级层次）---------- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.10);
+
+  /* ---------- 字号 ---------- */
+  --font-xs: 12px;
+  --font-sm: 13px;
+  --font-base: 14px;
+  --font-md: 16px;
+  --font-lg: 18px;
+  --font-xl: 22px;
+  --font-2xl: 28px;
+
+  /* ---------- 布局尺寸 ---------- */
+  --sidebar-width: 220px;
+  --sidebar-width-collapsed: 64px;
+  --header-height: 60px;
+
+  /* ---------- 过渡 ---------- */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.25s ease;
+
+  /* ---------- Element Plus 主题覆写 ----------
+     Element Plus 用 CSS 变量做主题，这里把它的变量指到我们的令牌上，
+     这样组件库的样式和自定义样式就统一了 */
+  --el-color-primary: var(--color-primary);
+  --el-color-primary-light-3: var(--color-primary-light);
+  --el-color-primary-dark-2: var(--color-primary-dark);
+  --el-color-success: var(--color-success);
+  --el-color-warning: var(--color-warning);
+  --el-color-danger: var(--color-danger);
+  --el-color-info: var(--color-info);
+  --el-text-color-primary: var(--color-text-primary);
+  --el-text-color-regular: var(--color-text-regular);
+  --el-border-color: var(--color-border);
+  --el-border-radius-base: var(--radius-md);
+  --el-font-size-base: var(--font-base);
+}
+
+/* ============================================================================
+   深色主题
+   ============================================================================
+   只覆盖变量，不改任何组件代码 —— 这就是设计令牌的价值体现。
+   通过 <html data-theme="dark"> 切换。
+   ============================================================================ */
+
+html[data-theme='dark'] {
+  --color-text-primary: #e5e7eb;
+  --color-text-regular: #d1d5db;
+  --color-text-secondary: #9ca3af;
+  --color-text-placeholder: #6b7280;
+
+  --color-border: #374151;
+  --color-border-light: #2d3748;
+  --color-bg-page: #111827;
+  --color-bg-card: #1f2937;
+  --color-bg-hover: #374151;
+
+  --color-primary-pale: #1e3a5f;
+  --color-success-pale: #1e3a2f;
+  --color-warning-pale: #3d2f15;
+  --color-danger-pale: #3d1f1f;
+  --color-info-pale: #2d3748;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* ============================================================================
+   全局基础样式
+   ============================================================================ */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  font-size: var(--font-base);
+  color: var(--color-text-regular);
+  background: var(--color-bg-page);
+  /* 字体渲染优化：让文字更清晰 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color var(--transition-base), color var(--transition-base);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+/* ---------- 滚动条美化 ----------
+   浏览器默认滚动条在 Windows 上很粗糙，自定义后整体质感提升明显 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-placeholder);
+}
+
+/* ---------- 通用工具类 ----------
+   少量高频使用的工具类，避免每个组件都重复写同样的样式 */
+.page-container {
+  padding: var(--space-6);
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.card {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border-light);
+  transition: box-shadow var(--transition-base);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.text-secondary {
+  color: var(--color-text-secondary);
+}
+
+.text-muted {
+  color: var(--color-text-placeholder);
+  font-size: var(--font-sm);
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---------- 过渡动画 ---------- */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity var(--transition-base);
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* 列表项的渐入动画（用于卡片列表，让页面不那么"硬"） */
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-in {
+  animation: slide-up 0.3s ease both;
+}
