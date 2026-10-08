@@ -124,17 +124,50 @@ EQUIPMENTS = [
 ]
 
 # 示例预约：(设备索引, 用户索引, 相对今天的天数, 开始, 结束, 用途, 状态)
+#
+# 说明（为什么要这么多条）：
+#   1. 覆盖全部 5 种状态，方便前端把每种状态的样式都验证一遍
+#   2. 每天的时段要"分散"（不同设备/不同时段），
+#      否则测试脚本里随便挑个时段就会撞到冲突，
+#      或者反过来因为冲突太多而测不出想测的东西
+#   3. 每个学生用户分到的预约数要留有余量 ——
+#      业务规则里"有效预约上限 10 条"，如果种子数据就占了 5 条，
+#      测试时再建几条就撞上限了，会把真正的 bug 掩盖掉
+#      （这一点是我在调试并发问题时真实踩到的坑）
 DEMO_BOOKINGS = [
-    (0, 3, -6, time(9, 0), time(11, 0), "数字电路实验：测量信号波形", BookingStatus.COMPLETED),
-    (1, 4, -5, time(14, 0), time(16, 0), "频谱分析实验：分析信号频谱特性", BookingStatus.COMPLETED),
-    (3, 5, -4, time(10, 0), time(12, 0), "电源负载特性测试", BookingStatus.COMPLETED),
-    (4, 6, -3, time(15, 0), time(17, 0), "电路参数测量实验", BookingStatus.COMPLETED),
-    (7, 7, -2, time(9, 0), time(11, 0), "物理光学实验：激光干涉测量", BookingStatus.COMPLETED),
-    (8, 8, -1, time(13, 0), time(15, 0), "光谱实验：测量材料光谱", BookingStatus.APPROVED),
-    (9, 3, 0, time(14, 0), time(16, 0), "生物分离实验：细胞分离纯化", BookingStatus.APPROVED),
-    (10, 4, 1, time(10, 0), time(12, 0), "基因扩增实验：DNA 扩增测试", BookingStatus.PENDING),
-    (11, 5, 2, time(15, 0), time(17, 0), "细胞观察实验：观察细胞形态", BookingStatus.PENDING),
-    (12, 6, 3, time(9, 0), time(11, 0), "机械加工实验：车床加工零件", BookingStatus.PENDING),
+    # ---------- 已拒绝 ----------
+    (10, 0, -8, time(15, 0), time(17, 0), "基因扩增实验：设备校准不合格，已拒绝",
+     BookingStatus.REJECTED),
+    (14, 1, -7, time(9, 0), time(11, 0), "五轴加工实验：设备维护中，已拒绝",
+     BookingStatus.REJECTED),
+
+    # ---------- 已完成（设备预约次数会累加）----------
+    (0, 0, -6, time(9, 0), time(11, 0), "数字电路实验：测量信号波形", BookingStatus.COMPLETED),
+    (1, 1, -5, time(14, 0), time(16, 0), "频谱分析实验：分析信号频谱特性", BookingStatus.COMPLETED),
+    (3, 2, -4, time(10, 0), time(12, 0), "电源负载特性测试", BookingStatus.COMPLETED),
+    (4, 3, -3, time(15, 0), time(17, 0), "电路参数测量实验", BookingStatus.COMPLETED),
+    (7, 4, -2, time(9, 0), time(11, 0), "物理光学实验：激光干涉测量", BookingStatus.COMPLETED),
+    (12, 0, -1, time(13, 0), time(15, 0), "机械加工实验：车床加工零件", BookingStatus.COMPLETED),
+
+    # ---------- 已取消 ----------
+    (9, 2, -3, time(9, 0), time(10, 0), "生物分离实验：临时有事取消", BookingStatus.CANCELLED),
+    (6, 3, 5, time(13, 0), time(15, 0), "交流电源测试：调整到其他设备", BookingStatus.CANCELLED),
+
+    # ---------- 已通过（未来，用于演示"使用中"和定时任务流转）----------
+    (0, 1, 0, time(8, 0), time(10, 0), "课程实验：数字示波器基础操作", BookingStatus.APPROVED),
+    (2, 2, 0, time(14, 0), time(16, 0), "信号发生器实践", BookingStatus.APPROVED),
+    (6, 3, 1, time(10, 0), time(12, 0), "混合域测量实验", BookingStatus.APPROVED),
+    (8, 4, 1, time(15, 0), time(17, 0), "光谱实验：材料成分分析", BookingStatus.APPROVED),
+
+    # ---------- 待审核（覆盖多种时段，方便演示审核流程）----------
+    (1, 0, 2, time(9, 0), time(11, 0), "频谱分析进阶实验", BookingStatus.PENDING),
+    (3, 1, 3, time(10, 0), time(12, 0), "电子负载性能测试", BookingStatus.PENDING),
+    (4, 2, 4, time(14, 0), time(16, 0), "万用表校准实验", BookingStatus.PENDING),
+    (5, 3, 5, time(9, 0), time(11, 0), "交流电源谐波测试", BookingStatus.PENDING),
+    (7, 4, 6, time(15, 0), time(17, 0), "激光干涉仪精度验证", BookingStatus.PENDING),
+    (10, 0, 7, time(9, 0), time(11, 0), "PCR 扩增实验", BookingStatus.PENDING),
+    (11, 1, 8, time(14, 0), time(16, 0), "显微观察实验", BookingStatus.PENDING),
+    (13, 2, 9, time(10, 0), time(12, 0), "数控编程实训", BookingStatus.PENDING),
 ]
 
 

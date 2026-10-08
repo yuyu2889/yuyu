@@ -90,6 +90,58 @@ class EquipmentRepository(BaseRepository[Equipment]):
         stmt = select(Equipment).where(Equipment.serial_number == serial_number)
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
+    async def lock_for_booking(self, equipment_id: int) -> Optional[Equipment]:
+        """
+        【并发控制核心】用数据库行级排他锁锁住设备记录。
+
+        ┌────────────────────────────────────────────────────────────────────┐
+        │ 为什么光有 Redis 锁还不够？（这是一个非常隐蔽的坑，值得记住）        │
+        │                                                                    │
+        │ MySQL 默认隔离级别是 REPEATABLE READ。它的规则是：                  │
+        │   事务的"读视图"在**第一次查询时**确定，之后整个事务都看这个快照。    │
+        │                                                                    │
+        │ 问题来了：HTTP 请求进来时，认证环节要执行                         │
+        │   SELECT * FROM users WHERE id = ?                                │
+        │ 这一查就把读视图定下来了 —— 此时还没拿到 Redis 锁。                 │
+        │                                                                    │
+        │ 于是出现这个时序：                                                 │
+        │   请求A: 认证(建读视图) → 拿Redis锁 → 查冲突(看不到B) → 插入 → 提交  │
+        │   请求B: 认证(建读视图) → 等Redis锁 → 拿到锁 → 查冲突              │
+        │           ↑ 读视图是"认证时"的快照，看不到A刚提交的数据！           │
+        │           → 判定无冲突 → 插入 → 重复预约产生                       │
+        │                                                                    │
+        │ 所以「Redis 锁 + 普通 SELECT」并不能保证串行化的正确性，            │
+        │ 因为读的是一致性快照，不是最新数据。                                │
+        └────────────────────────────────────────────────────────────────────┘
+
+        **解法：SELECT ... FOR UPDATE**
+
+        行锁的语义和快照读完全不同：
+        - 它是"当前读"（current read），读到的是**最新已提交数据**
+        - 它会阻塞其他事务对同一行的加锁请求
+
+        所以加了行锁之后，时序变成：
+          请求A: 拿到设备行锁 → 查冲突 → 插入 → 提交（释放行锁）
+          请求B: 想拿设备行锁 → 被阻塞 → A提交后拿到锁
+                 → 此时执行当前读，**能看到 A 插入的数据** → 检测出冲突 ✓
+
+        这个方案的关键优势（面试可以讲）：
+          **即使 Redis 完全挂掉，数据库行锁依然保证正确性**。
+          Redis 锁在这里的作用变成了"性能优化"（减少数据库锁竞争、快速失败），
+          而不是"正确性的唯一保障"。
+          这种"用强一致的存储做最终保证，用弱一致的组件做性能优化"的分层设计
+          是很重要的思路。
+
+        注意：查询条件里也带上 status != maintenance 的判断，
+        避免对已删除的设备加锁（返回 None 让调用方处理）。
+        """
+        stmt = (
+            select(Equipment)
+            .where(Equipment.id == equipment_id)
+            .with_for_update()   # 生成 SELECT ... FOR UPDATE
+        )
+        return (await self.db.execute(stmt)).scalar_one_or_none()
+
     async def list_equipments(
         self,
         offset: int,

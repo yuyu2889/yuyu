@@ -47,6 +47,7 @@ from app.core.config import BASE_DIR, settings  # noqa: E402
 from app.core.database import check_database_connection, dispose_engine  # noqa: E402
 from app.core.exceptions import register_exception_handlers  # noqa: E402
 from app.core.logging_conf import setup_logging  # noqa: E402
+from app.core.scheduler import start_scheduler, stop_scheduler  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -87,9 +88,11 @@ async def lifespan(app: FastAPI):
     upload_dir = BASE_DIR / "app" / "static" / "uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    # 4. 启动定时任务（下一批次实现）
-    # from app.core.scheduler import start_scheduler, stop_scheduler
-    # start_scheduler()
+    # 4. 启动定时任务
+    #    ⚠️ 注意：如果你用 uvicorn --reload 启动，lifespan 会被执行两次，
+    #    定时任务就会注册两次，同一份数据被处理两遍。
+    #    启动命令里不要加 --reload（见本文件顶部的说明）。
+    start_scheduler()
 
     logger.info("[OK] 应用启动完成，接口文档: http://127.0.0.1:8001/docs")
 
@@ -97,7 +100,7 @@ async def lifespan(app: FastAPI):
 
     # ========== 关闭 ==========
     logger.info("正在关闭应用...")
-    # stop_scheduler()
+    stop_scheduler()
     await close_redis()
     await dispose_engine()
     logger.info("[OK] 应用已关闭，资源已释放")

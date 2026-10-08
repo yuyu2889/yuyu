@@ -72,6 +72,16 @@ class RateLimiter:
         :param key: 限流维度，通常是 "接口名:客户端IP"
         :raises AppException: 429 请求过于频繁
         """
+        # 限流总开关（配置项 RATE_LIMIT_ENABLED）。
+        # 为什么要有这个开关？
+        # 测试和并发压测时需要关掉限流，否则得到的是"被限流拒绝"的结果，
+        # 而不是"业务逻辑正确拒绝"的结果 —— 那种"假通过"最危险。
+        # 生产环境必须保持开启。
+        from app.core.config import settings as _settings
+
+        if not _settings.rate_limit_enabled:
+            return
+
         now = time.monotonic()
         with self._lock:
             bucket = self._buckets.get(key)

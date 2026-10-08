@@ -112,6 +112,12 @@ class Settings(BaseSettings):
         "http://localhost:5173,http://127.0.0.1:5173", alias="CORS_ORIGINS"
     )
 
+    # ---------- 限流 ----------
+    # 开发/测试时建议关掉：否则测试脚本连续发请求会被 429 拦住，
+    # 导致"测的是限流而不是业务逻辑"，得到假的通过结果。
+    # 生产环境必须开启。
+    rate_limit_enabled: bool = Field(True, alias="RATE_LIMIT_ENABLED")
+
     # ---------- 邮件 ----------
     smtp_host: str = Field("smtp.qq.com", alias="SMTP_HOST")
     smtp_port: int = Field(465, alias="SMTP_PORT")
