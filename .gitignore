@@ -34,3 +34,7 @@ dist/
 .vscode/
 Thumbs.db
 .DS_Store
+
+# 验证脚本的输出文件（每次跑都会重新生成，不需要提交）
+_batch*_check.txt
+_*_check.txt
